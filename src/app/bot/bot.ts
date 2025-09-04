@@ -14,13 +14,15 @@ bot.command("start", async (ctx) => {
   );
 });
 
-// Обрабатываем текстовые сообщения
+// Обработчик текстовых сообщений с контролем дубликатов
+let lastUpdateId = 0;
 bot.on("message:text", async (ctx) => {
   const chatId = ctx.chat.id;
   const userMessage = ctx.message.text;
 
-  // Пропускаем обработку, если сообщение является командой
-  if (userMessage.startsWith("/")) return;
+  // Пропускаем команды и дубликаты
+  if (userMessage.startsWith("/") || ctx.update.update_id <= lastUpdateId) return;
+  lastUpdateId = ctx.update.update_id;
 
   // Отправляем временное сообщение
   const placeholderMessage = await ctx.reply("⏳ Запрос обрабатывается...");
