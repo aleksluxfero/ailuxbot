@@ -1,21 +1,20 @@
 import { bot } from '@/app/bot/bot';
-import { webhookCallback } from 'grammy';
+import { webhookStream } from 'vercel-grammy';  // Импорт из пакета
 import { NextRequest } from 'next/server';
 
-// Конфигурация для Vercel для запуска в Edge-среде
+// Конфигурация для Vercel (оставляем edge, но можно переключить на 'nodejs' для Fluid Compute, см. ниже)
 export const runtime = 'edge';
 export const preferredRegion = 'arn1';
 
-// Создаем обработчик, используя 'std/http' для совместимости с Edge
-const handleUpdate = webhookCallback(bot, 'std/http');
+// Создаем обработчик с таймаутом (например, 25 секунд, чтобы не превысить Vercel лимит)
+const handleUpdate = webhookStream(bot);
 
 export async function POST(req: NextRequest) {
   try {
-    // Передаем запрос в обработчик grammY
+    // Передаем запрос в стриминговый обработчик
     return await handleUpdate(req);
   } catch (error) {
     console.error('Webhook error:', error);
-    // В случае непредвиденной ошибки возвращаем статус 500
     return new Response('Error processing webhook', { status: 500 });
   }
 }
