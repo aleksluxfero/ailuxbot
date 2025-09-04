@@ -1,23 +1,33 @@
 import { Bot } from "grammy";
 
-// Убеждаемся, что переменные окружения доступны
+// Убедимся, что переменные окружения доступны
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) throw new Error("TELEGRAM_BOT_TOKEN is unset");
 
 // Создаем и экспортируем экземпляр бота
 export const bot = new Bot(token);
 
-// Здесь размещаем всю логику обработки сообщений
+// Обрабатываем команду /start
+bot.command("start", async (ctx) => {
+  await ctx.reply(
+    "👋 Добро пожаловать! Я бот, который отвечает на ваши вопросы с помощью ИИ. Просто напишите мне сообщение, и я постараюсь ответить максимально полезно на русском языке!"
+  );
+});
+
+// Обрабатываем текстовые сообщения
 bot.on("message:text", async (ctx) => {
   const chatId = ctx.chat.id;
   const userMessage = ctx.message.text;
 
-  // 1. Отправляем временное сообщение и сохраняем его ID
+  // Пропускаем обработку, если сообщение является командой
+  if (userMessage.startsWith("/")) return;
+
+  // Отправляем временное сообщение
   const placeholderMessage = await ctx.reply("⏳ Запрос обрабатывается...");
   const messageId = placeholderMessage.message_id;
 
   try {
-    // 2. Отправляем запрос к OpenRouter AI
+    // Отправляем запрос к OpenRouter AI с инструкцией для ответа на русском
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -27,36 +37,37 @@ bot.on("message:text", async (ctx) => {
         "X-Title": process.env.YOUR_SITE_NAME || "",
       },
       body: JSON.stringify({
-        model: "qwen/qwen3-235b-a22b:free", // Или любая другая модель
+        model: "qwen/qwen3-235b-a22b:free",
         messages: [
+          { role: "system", content: "Отвечай на русском языке, используя понятный и естественный стиль." },
           { role: "user", content: userMessage },
         ],
       }),
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
-        console.error("OpenRouter API Error:", errorData);
-        throw new Error(`API Error: ${response.statusText}`);
+      const errorData = await response.json();
+      throw new Error(`API Error: ${response.status} - ${errorData.message || response.statusText}`);
     }
 
     const data = await response.json();
     const aiResponse = data.choices[0]?.message?.content?.trim();
 
-    if (aiResponse) {
-      // 3. Редактируем исходное сообщение готовым ответом от AI
-      await ctx.api.editMessageText(chatId, messageId, aiResponse);
-    } else {
-      throw new Error("Не удалось получить ответ от AI.");
+    if (!aiResponse) {
+      throw new Error("Пустой ответ от AI");
     }
 
+    // Редактируем временное сообщение с ответом от AI
+    await ctx.api.editMessageText(chatId, messageId, aiResponse, {
+      parse_mode: "Markdown",
+    });
   } catch (error) {
     console.error("Ошибка при обработке запроса:", error);
-    // 4. В случае ошибки, также редактируем сообщение, чтобы уведомить пользователя
+    // Редактируем временное сообщение с текстом ошибки
     await ctx.api.editMessageText(
       chatId,
       messageId,
-      "❌ Произошла ошибка. Попробуйте позже."
+      "❌ Ошибка при обработке запроса. Пожалуйста, попробуйте снова."
     );
   }
 });
